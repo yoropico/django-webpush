@@ -49,7 +49,7 @@ def _send_notification(subscription, payload, ttl):
         }
 
     try:
-        req = webpush(subscription_info=subscription_data, data=payload, ttl=ttl, **vapid_data)
+        req = webpush(subscription_info=subscription_data, data=payload, ttl=ttl, **vapid_data, headers={'x-wns-cache-policy': 'no-cache'})
         return req
     except WebPushException as e:
         # If the subscription is expired, delete it.
