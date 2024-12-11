@@ -1,34 +1,61 @@
-// Register event listener for the 'push' event.
-self.addEventListener('push', function(event) {
-  // Retrieve the textual payload from event.data (a PushMessageData object).
-  // Other formats are supported (ArrayBuffer, Blob, JSON), check out the documentation
-  // on https://developer.mozilla.org/en-US/docs/Web/API/PushMessageData.
-  let payload = event.data ? event.data.text() : {"head": "No Content", "body": "No Content", "icon": ""},
-    data = JSON.parse(payload),
-    head = data.head,
-    body = data.body,
-    icon = data.icon;
-    // If no url was received, it opens the home page of the website that sent the notification
-    // Whitout this, it would open undefined or the service worker file.
-    url = data.url ? data.url: self.location.origin;
 
-  // Keep the service worker alive until the notification is created.
+// Register event listener for the 'push' event.lib-static
+//webpush_serviceworker.js
+//lib/static/1129
+self.addEventListener('push', function(event) {
+  let payload = event.data ? event.data.text() : '{"head": "No Content", "body": "No Content", "icon": "", "badge": 0, "url": "/"}';
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      console.error('Push event data is not JSON:', e);
+    }
+  }
+
+  const head = data.head || "새 알림";
+  const body = data.body || "새로운 알림이 도착했습니다.";
+  const icon = data.icon || '/static/images/icons/icon-192x192.png';
+  const badgeCount = typeof data.badge === 'number' ? data.badge : parseInt(data.badge) || 0;
+  const url = data.url || self.location.origin;
+
+  const options = {
+    body: body,
+    icon: icon,
+    badge: badgeCount,
+    data: {
+      url: url
+    },
+    // 필요에 따라 다른 옵션 추가
+  };
+
   event.waitUntil(
-    // Show a notification with title 'ServiceWorker Cookbook' and use the payload
-    // as the body.
-    self.registration.showNotification(head, {
-      body: body,
-      icon: icon,
-      data: {url: url}	
-    })
-  );
+        self.registration.showNotification(head, options).then(() => {
+            if (self.clients) {
+                self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+                    clientList.forEach(client => {
+                        console.log('Sending badge count to client:', badgeCount); // 로그 추가
+                        client.postMessage({ badge: badgeCount });
+                    });
+                });
+            }
+        })
+    );
 });
 
-self.addEventListener('notificationclick', function (event) {
-  event.waitUntil(
-    event.preventDefault(),
-    event.notification.close(),
-    self.clients.openWindow(event.notification.data.url)
-  );
-})
-
+// 푸시 알림 클릭 시 해당 URL로 이동 및 배지 초기화
+self.addEventListener('notificationclick', function(event) {
+    console.log('Notification click received:', event);
+    event.notification.close();
+    event.waitUntil(
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+            clientList.forEach(client => {
+                console.log('Sending badge count reset to client'); // 로그 추가
+                client.postMessage({ badge: 0 });
+            });
+            if (clients.openWindow) {
+                return clients.openWindow(event.notification.data.url);
+            }
+        })
+    );
+});
